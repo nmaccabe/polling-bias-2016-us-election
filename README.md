@@ -1,8 +1,7 @@
 # 2016 U.S. Presidential Election Polling Bias — Findings
 
-**Data:** FiveThirtyEight 2016 Presidential General Election Polls  
+**Data:** Presidential General Election Polls  
 **Access:** `dslabs::polls_us_election_2016`  
-**Original source:** https://projects.fivethirtyeight.com/general-model/president_general_polls_2016.csv
 
 ---
 
@@ -123,4 +122,3 @@ The weighted quality mean of −0.16 is not a confident Trump prediction, but it
 ## References
 
 - Irizarry, R.A. and Gill, A. (2021). *dslabs: Data Science Labs*. R package version 0.7.4. https://CRAN.R-project.org/package=dslabs  
-- FiveThirtyEight (2016). *2016 U.S. Presidential General Election Polls*. https://projects.fivethirtyeight.com/general-model/president_general_polls_2016.csv
