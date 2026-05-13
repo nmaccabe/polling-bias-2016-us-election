@@ -4,6 +4,30 @@
 **Access:** `dslabs::polls_us_election_2016`  
 
 ---
+```
+polling-bias-2016-us-election/
+├── src/
+│   └── analysis.R
+├── output/
+│   └── figures/
+│       ├── 01_tplot_full.png
+│       ├── 02_tplot_quality.png
+│       ├── 03_tplot_bad.png
+│       ├── 04_boxplot_population_full.png
+│       ├── 05_boxplot_population_quality.png
+│       ├── 06_boxplot_population_bad.png
+│       ├── 07_timeseries_full.png
+│       ├── 08_timeseries_quality.png
+│       ├── 09_timeseries_bad.png
+│       ├── 10_weighted_dist_full.png
+│       ├── 11_weighted_dist_quality.png
+│       ├── 12_weighted_dist_bad.png
+│       ├── 13_state_sample_with_us.png
+│       ├── 14_state_sample_without_us.png
+│       └── 15_proportion_quality_by_state.png
+├── .gitignore
+└── README.md
+```
 
 ## 1. Margin Definition
 

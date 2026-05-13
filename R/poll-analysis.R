@@ -448,7 +448,7 @@ ggplot(map_data_merged, aes(x = long, y = lat, group = group, fill = margin)) +
   )
 ggsave("../output/figures/16_state_heatmap.png", width = 14, height = 5.5, dpi = 150)
 
-
+# # Unweighted
 # state_margins_unweighted <- df_clean %>%
 #   group_by(state) %>%
 #   summarise(margin = mean(margin, na.rm = TRUE)) %>%

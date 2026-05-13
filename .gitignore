@@ -1,8 +1,0 @@
-# R
-.Rhistory
-.RData
-.Rproj.user/
-*.Rproj
-
-# Output figures
-output/figures/
