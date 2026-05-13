@@ -3,7 +3,7 @@
 #                            Load R Libraries                                  #
 #                                                                              #
 ################################################################################
-# install.packages(c("ggplot2", "lubridate", "dplyr", "moments", "Hmisc", "stargazer", "dslabs"), dependencies = TRUE)
+# install.packages(c("ggplot2", "lubridate", "dplyr", "moments", "Hmisc", "stargazer", "dslabs", "maps"), dependencies = TRUE)
 library(ggplot2)
 library(lubridate)
 library(dplyr)
@@ -11,6 +11,7 @@ library(moments)
 library(Hmisc)
 library(stargazer)
 library(dslabs)
+library(maps)
 ################################################################################
 #                                                                              #
 #                         Set your working directory                           #
@@ -409,3 +410,72 @@ ggplot(state_sample_split, aes(x = reorder(state, -samplesize), y = samplesize, 
     axis.text.x      = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7)
   )
 ggsave("../output/figures/15_proportion_quality_by_state.png", width = 14, height = 5.5, dpi = 150)
+
+# ── 9. Which State Voted for Who ──────────────────────────────────────────────
+state_margins <- df_clean %>%
+  group_by(state) %>%
+  summarise(margin = weighted.mean(margin, weight, na.rm = TRUE)) %>%
+  filter(state != "U.S.") %>%
+  mutate(state = tolower(state))
+
+# Get US map data
+us_map <- map_data("state")
+
+# Join
+map_data_merged <- us_map %>%
+  left_join(state_margins, by = c("region" = "state"))
+
+ggplot(map_data_merged, aes(x = long, y = lat, group = group, fill = margin)) +
+  geom_polygon(color = "white", linewidth = 0.3) +
+  scale_fill_gradient2(
+    low      = "#D85A30",
+    mid      = "white", 
+    high     = "#185FA5",
+    midpoint = 0,
+    name     = "Clinton − Trump\nmargin"
+  ) +
+  coord_fixed(1.3) +
+  labs(
+    title    = "Weighted poll margin by state — 2016 US Presidential Election",
+    subtitle = "Blue = Clinton leading. Orange = Trump leading.",
+    x        = NULL,
+    y        = NULL
+  ) +
+  theme_void(base_size = 13) +
+  theme(
+    plot.title    = element_text(face = "bold"),
+    legend.position = "right"
+  )
+ggsave("../output/figures/16_state_heatmap.png", width = 14, height = 5.5, dpi = 150)
+
+
+# state_margins_unweighted <- df_clean %>%
+#   group_by(state) %>%
+#   summarise(margin = mean(margin, na.rm = TRUE)) %>%
+#   filter(state != "U.S.") %>%
+#   mutate(state = tolower(state))
+# 
+# map_data_unweighted <- us_map %>%
+#   left_join(state_margins_unweighted, by = c("region" = "state"))
+# 
+# ggplot(map_data_unweighted, aes(x = long, y = lat, group = group, fill = margin)) +
+#   geom_polygon(color = "white", linewidth = 0.3) +
+#   scale_fill_gradient2(
+#     low      = "#D85A30",
+#     mid      = "white",
+#     high     = "#185FA5",
+#     midpoint = 0,
+#     name     = "Clinton − Trump\nmargin"
+#   ) +
+#   coord_fixed(1.3) +
+#   labs(
+#     title    = "Unweighted poll margin by state — 2016 US Presidential Election",
+#     subtitle = "Blue = Clinton leading. Orange = Trump leading.",
+#     x        = NULL,
+#     y        = NULL
+#   ) +
+#   theme_void(base_size = 13) +
+#   theme(
+#     plot.title      = element_text(face = "bold"),
+#     legend.position = "right"
+#   )
