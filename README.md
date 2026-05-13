@@ -24,7 +24,8 @@ polling-bias-2016-us-election/
 │       ├── 12_weighted_dist_bad.png
 │       ├── 13_state_sample_with_us.png
 │       ├── 14_state_sample_without_us.png
-│       └── 15_proportion_quality_by_state.png
+│       ├── 15_state_sample_without_us.png
+│       └── 16_state_heatmap.png
 ├── .gitignore
 └── README.md
 ```
@@ -141,6 +142,8 @@ The weighted quality mean of −0.16 is not a confident Trump prediction, but it
 **Proportion of quality vs low quality polling by state**  
 ![Proportion of sample size by pollster quality per state](output/figures/15_proportion_quality_by_state.png)
 
+**State Heatmap (Weighted)**
+![Weighted poll margin per state](output/figures/16_state_heatmap.png)
 ---
 
 ## References
