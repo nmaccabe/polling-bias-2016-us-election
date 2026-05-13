@@ -444,6 +444,7 @@ ggplot(map_data_merged, aes(x = long, y = lat, group = group, fill = margin)) +
   theme_void(base_size = 13) +
   theme(
     plot.title    = element_text(face = "bold"),
+    plot.background  = element_rect(fill = "white", color = NA),
     legend.position = "right"
   )
 ggsave("../output/figures/16_state_heatmap.png", width = 14, height = 5.5, dpi = 150)
