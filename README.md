@@ -6,6 +6,34 @@ This project explores how different weighting choices change the interpretation 
 
 The answer from this experiment is surprising: the pollster-cap weighting scheme gives sensible-looking influence to high-quality pollsters, but it pushes the pooled polling average further toward Clinton and often shifts battleground states further toward Clinton as well.
 
+
+## Repository Structure
+```
+polling-bias-2016-us-election/
+├── data/
+│   ├── polls_us_election_2016.csv
+│   └── pollster-ratings.csv
+├── R/
+│   └── poll-analysis.R
+├── output/
+│   └── figures/
+│       ├── 01_tplot_full.png
+│       ├── 02_tplot_quality.png
+│       ├── 03_tplot_bad.png
+│       ├── 04_boxplot_population_full.png
+│       ├── 05_boxplot_population_quality.png
+│       ├── 06_boxplot_population_bad.png
+│       ├── 07_timeseries_full.png
+│       ├── 08_timeseries_quality.png
+│       ├── 09_timeseries_bad.png
+│       ├── 10_state_sample_without_us.png
+│       ├── 11_proportion_quality_by_state.png
+│       ├── 13_biggest_pollers.png
+│       ├── 14_pollers_total_weight.png
+│       └── 15_battleground_weight_shift.png
+├── README.md
+└── .gitignore
+```
 ---
 
 ## Data

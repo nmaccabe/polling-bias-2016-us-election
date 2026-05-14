@@ -342,7 +342,7 @@ ggplot(pollster_sample, aes(x = reorder(pollster, sample_proportion), y = sample
     panel.grid.minor = element_blank(),
     plot.background  = element_rect(fill = "white", color = NA)
   )
-ggsave("../output/figures/13_biggest_pollers.png", width = 9, height = 5.5, dpi = 150)
+ggsave("../output/figures/13_biggest_pollers.png", width = 12, height = 5.5, dpi = 150)
 
 # See which pollsters are getting the most influence
 pollster_weights <- df_clean %>%
@@ -381,7 +381,7 @@ ggplot(top_pollster_weights, aes(x = reorder(pollster, total_weight), y = total_
     panel.grid.minor = element_blank(),
     plot.background = element_rect(fill = "white", color = NA)
   )
-ggsave("../output/figures/14_pollers_total_weight.png", width = 9, height = 5.5, dpi = 150)
+ggsave("../output/figures/14_pollers_total_weight.png", width = 12, height = 5.5, dpi = 150)
 
 pollster_diagnostic <- df_clean %>%
   group_by(pollster, grade) %>%
@@ -512,4 +512,4 @@ ggplot(state_battlegrounds,
     plot.background = element_rect(fill = "white", color = NA)
   )
 
-ggsave("../output/figures/15_battleground_weight_shift.png", width = 9, height = 5.5, dpi = 150)
+ggsave("../output/figures/15_battleground_weight_shift.png", width = 14, height = 5.5, dpi = 150)
