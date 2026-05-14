@@ -3,15 +3,11 @@
 #                            Load R Libraries                                  #
 #                                                                              #
 ################################################################################
-# install.packages(c("ggplot2", "lubridate", "dplyr", "moments", "Hmisc", "stargazer", "dslabs", "maps"), dependencies = TRUE)
+# install.packages(c("ggplot2", "lubridate", "dplyr", "dslabs"), dependencies = TRUE)
 library(ggplot2)
 library(lubridate)
 library(dplyr)
-library(moments)
-library(Hmisc)
-library(stargazer)
 library(dslabs)
-library(maps)
 ################################################################################
 #                                                                              #
 #                         Set your working directory                           #
@@ -224,29 +220,52 @@ ggsave("../output/figures/09_timeseries_bad.png", width = 9, height = 5.5, dpi =
 
 # ── 6. Weights ────────────────────────────────────────────────────────────────
 # Full weight schema
+# Create df_clean from df
 df_clean <- df[!is.na(df$grade) & !is.na(df$margin), ]
 
-df_clean$grade_weight <- ifelse(df_clean$grade == "A+", 4/4,
-                                ifelse(df_clean$grade == "A",  3/4,
-                                       ifelse(df_clean$grade == "A-", 2/4,
-                                              ifelse(df_clean$grade == "B+", 1/4,
-                                                     ifelse(df_clean$grade == "B",  0.5/4,
-                                                            ifelse(df_clean$grade == "B-", 0.4/4,
-                                                                   ifelse(df_clean$grade == "C+", 0.3/4,
-                                                                          ifelse(df_clean$grade == "C",  0.2/4,
-                                                                                 ifelse(df_clean$grade == "C-", 0.1/4,
-                                                                                        ifelse(df_clean$grade == "D",  0.05/4, NA))))))))))
+# Load ratings
+ratings <- read.csv("../data/pollster-ratings.csv", stringsAsFactors = FALSE)
 
-df_clean$weight <- df_clean$grade_weight / df_clean$samplesize
-df_clean$weight <- df_clean$weight / sum(df_clean$weight, na.rm = TRUE)
+# Join pollster predictive accuracy onto df_clean
+df_clean <- df_clean %>%
+  left_join(
+    ratings[, c("Pollster", "Predictive.Plus.Minus")],
+    by = c("pollster" = "Pollster")
+  )
 
-sum(is.na(df_clean$weight))
-sum(is.na(df_clean$margin))
-sum(is.na(df_clean$grade_weight))
+# Step 1 — assign each pollster a total influence cap
+# Lower Predictive Plus-Minus is better, so exp(-x) gives better pollsters more weight.
+pollster_level <- df_clean %>%
+  group_by(pollster) %>%
+  summarise(
+    predictive_pm = mean(Predictive.Plus.Minus, na.rm = TRUE),
+    mean_sample   = mean(samplesize, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    quality_weight = exp(-predictive_pm),
+    pollster_cap   = quality_weight * sqrt(mean_sample)
+  )
+
+# Step 2 — distribute each pollster's cap across its own polls
+# Larger individual polls get more of that pollster's fixed influence.
+df_clean <- df_clean %>%
+  left_join(
+    pollster_level[, c("pollster", "pollster_cap", "quality_weight", "predictive_pm")],
+    by = "pollster"
+  ) %>%
+  group_by(pollster) %>%
+  mutate(
+    within_pollster_weight = sqrt(samplesize) / sum(sqrt(samplesize), na.rm = TRUE),
+    raw_weight = pollster_cap * within_pollster_weight
+  ) %>%
+  ungroup() %>%
+  mutate(weight = raw_weight / sum(raw_weight, na.rm = TRUE))
 
 df_clean <- df_clean[!is.na(df_clean$weight), ]
 sum(df_clean$weight)
 
+# Full
 weighted_mu <- weighted.mean(df_clean$margin, df_clean$weight, na.rm = TRUE)
 weighted_mu
 
@@ -286,79 +305,144 @@ cat("Bad pollster sample sizes:\n")
 cat("  Mean:  ", mean(df_bad$samplesize, na.rm = TRUE), "\n")
 cat("  Median:", median(df_bad$samplesize, na.rm = TRUE), "\n")
 
-# ── 7. Weighted Distribution Visualizations ───────────────────────────────────
-# Full Plot
-ggplot(df_clean, aes(x = margin, weight = weight)) +
-  geom_histogram(binwidth = binwidth, fill = "#B5D4F4", color = "#185FA5",
-                 linewidth = 0.4, alpha = 0.8) +
-  geom_vline(xintercept = weighted_mu, color = "#185FA5",
-             linewidth = 0.7, linetype = "dashed") +
-  geom_vline(xintercept = 0, color = "red", linewidth = 0.7, linetype = "dashed") +
-  labs(
-    title    = "Weighted poll margin full distribution — all states",
-    subtitle = "Clinton minus Trump. Weighted by grade and sample size.",
-    x        = "Clinton − Trump margin (percentage points)",
-    y        = "Weighted count"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(plot.title = element_text(face = "bold"), panel.grid.minor = element_blank())
-ggsave("../output/figures/10_weighted_dist_full.png", width = 9, height = 5.5, dpi = 150)
+# See which pollsters have the highest polling share
+pollster_sample <- df_clean %>%
+  group_by(pollster, grade) %>%
+  summarise(
+    total_sample = sum(samplesize),
+    .groups = "drop"
+  ) %>%
+  mutate(sample_proportion = total_sample / sum(total_sample)) %>%
+  arrange(desc(sample_proportion)) %>%
+  head(20)
 
-# Quality Plot
-ggplot(df_clean_quality, aes(x = margin, weight = weight)) +
-  geom_histogram(binwidth = binwidth, fill = "#B5D4F4", color = "#185FA5",
-                 linewidth = 0.4, alpha = 0.8) +
-  geom_vline(xintercept = weighted_mu_quality, color = "#185FA5",
-             linewidth = 0.7, linetype = "dashed") +
-  geom_vline(xintercept = 0, color = "red", linewidth = 0.7, linetype = "dashed") +
-  labs(
-    title    = "Weighted poll margin quality pollster distribution — all states",
-    subtitle = "Clinton minus Trump. Weighted by grade and sample size.",
-    x        = "Clinton − Trump margin (percentage points)",
-    y        = "Weighted count"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(plot.title = element_text(face = "bold"), panel.grid.minor = element_blank())
-ggsave("../output/figures/11_weighted_dist_quality.png", width = 9, height = 5.5, dpi = 150)
+pollster_sample%>%
+  group_by(pollster, grade) %>%
+  summarise(
+    sample_proportion = sample_proportion,
+    total_sample = total_sample,
+    .groups = "drop"
+  ) %>%
+  arrange(desc(sample_proportion)) %>%
+  head(20)
 
-# Bad Plot
-ggplot(df_clean_bad, aes(x = margin, weight = weight)) +
-  geom_histogram(binwidth = binwidth, fill = "#B5D4F4", color = "#185FA5",
-                 linewidth = 0.4, alpha = 0.8) +
-  geom_vline(xintercept = weighted_mu_bad, color = "#185FA5",
-             linewidth = 0.7, linetype = "dashed") +
-  geom_vline(xintercept = 0, color = "red", linewidth = 0.7, linetype = "dashed") +
+ggplot(pollster_sample, aes(x = reorder(pollster, sample_proportion), y = sample_proportion, fill = grade)) +
+  geom_bar(stat = "identity", alpha = 0.8, color = "#185FA5", linewidth = 0.3) +
+  coord_flip() +
   labs(
-    title    = "Weighted poll margin bad pollster distribution — all states",
-    subtitle = "Clinton minus Trump. Weighted by grade and sample size.",
-    x        = "Clinton − Trump margin (percentage points)",
-    y        = "Weighted count"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(plot.title = element_text(face = "bold"), panel.grid.minor = element_blank())
-ggsave("../output/figures/12_weighted_dist_bad.png", width = 9, height = 5.5, dpi = 150)
-
-# ── 8. State Sample Proportions ───────────────────────────────────────────────
-state_sample <- aggregate(samplesize ~ state, data = df_clean, FUN = sum)
-state_sample <- state_sample[order(-state_sample$samplesize), ]
-
-ggplot(state_sample, aes(x = reorder(state, -samplesize), y = samplesize)) +
-  geom_bar(stat = "identity", fill = "#B5D4F4", color = "#185FA5",
-           linewidth = 0.3, alpha = 0.8) +
-  labs(
-    title    = "Total sample size by state",
-    subtitle = "Sum of all poll respondents per state. Includes U.S. national polls.",
-    x        = "State",
-    y        = "Total sample size"
+    title    = "Top 20 pollsters by proportion of total sample size",
+    subtitle = "Share of all respondents across the dataset. Coloured by grade.",
+    x        = "Pollster",
+    y        = "Proportion of total sample",
+    fill     = "Grade"
   ) +
   theme_minimal(base_size = 11) +
   theme(
     plot.title       = element_text(face = "bold"),
     panel.grid.minor = element_blank(),
-    axis.text.x      = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7)
+    plot.background  = element_rect(fill = "white", color = NA)
   )
-ggsave("../output/figures/13_state_sample_with_us.png", width = 14, height = 5.5, dpi = 150)
+ggsave("../output/figures/13_biggest_pollers.png", width = 9, height = 5.5, dpi = 150)
 
+# See which pollsters are getting the most influence
+pollster_weights <- df_clean %>%
+  group_by(pollster, grade) %>%
+  summarise(
+    total_weight = sum(weight),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_weight))
+
+pollster_weights%>%
+  group_by(pollster, grade) %>%
+  summarise(
+    total_weight = sum(total_weight),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_weight)) %>%
+  head(20)
+
+top_pollster_weights <- pollster_weights |>
+  head(20)
+
+ggplot(top_pollster_weights, aes(x = reorder(pollster, total_weight), y = total_weight, fill = grade)) +
+  geom_bar(stat = "identity", alpha = 0.8, color = "#185FA5", linewidth = 0.3) +
+  coord_flip() +
+  labs(
+    title    = "Top 20 pollsters by total weight share",
+    subtitle = "Pollster-cap weights using predictive plus-minus and sample size. Coloured by grade.",
+    x        = "Pollster",
+    y        = "Total weight share",
+    fill     = "Grade"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title      = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+ggsave("../output/figures/14_pollers_total_weight.png", width = 9, height = 5.5, dpi = 150)
+
+pollster_diagnostic <- df_clean %>%
+  group_by(pollster, grade) %>%
+  summarise(
+    total_weight = sum(weight, na.rm = TRUE),
+    mean_margin = weighted.mean(margin, weight, na.rm = TRUE),
+    n_polls = n(),
+    mean_sample = mean(samplesize, na.rm = TRUE),
+    predictive_pm = mean(predictive_pm, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_weight))
+
+head(pollster_diagnostic, 25)
+
+state_margins <- df_clean %>%
+  filter(state != "U.S.") %>%
+  group_by(state) %>%
+  mutate(state_weight = weight / sum(weight, na.rm = TRUE)) %>%
+  summarise(
+    weighted_margin   = weighted.mean(margin, state_weight, na.rm = TRUE),
+    unweighted_margin = mean(margin, na.rm = TRUE),
+    n_polls           = n(),
+    total_weight      = sum(weight, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(weighted_margin))
+
+state_margins
+
+top_pollster_states <- df_clean %>%
+  filter(pollster %in% pollster_diagnostic$pollster[1:20]) %>%
+  group_by(pollster, state) %>%
+  summarise(
+    n_polls      = n(),
+    mean_margin  = mean(margin, na.rm = TRUE),
+    total_weight = sum(weight, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(pollster, desc(total_weight))
+
+top_pollster_states
+
+battlegrounds <- c(
+  "Florida", "Pennsylvania", "Michigan", "Wisconsin",
+  "North Carolina", "Ohio", "Iowa", "Nevada",
+  "Arizona", "Georgia", "New Hampshire", "Colorado"
+)
+
+state_battlegrounds <- state_margins %>%
+  filter(state %in% battlegrounds) %>%
+  mutate(
+    weighted_winner = ifelse(weighted_margin > 0, "Clinton", "Trump"),
+    unweighted_winner = ifelse(unweighted_margin > 0, "Clinton", "Trump"),
+    weight_shift = weighted_margin - unweighted_margin
+  ) %>%
+  arrange(weighted_margin)
+
+state_battlegrounds
+
+# ── 7. State Polling Ratios and Battleground Weight Shift Plot ────────────────
 df_state <- df_clean[df_clean$state != "U.S.", ]
 state_sample <- aggregate(samplesize ~ state, data = df_state, FUN = sum)
 state_sample <- state_sample[order(-state_sample$samplesize), ]
@@ -378,7 +462,7 @@ ggplot(state_sample, aes(x = reorder(state, -samplesize), y = samplesize)) +
     panel.grid.minor = element_blank(),
     axis.text.x      = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7)
   )
-ggsave("../output/figures/14_state_sample_without_us.png", width = 14, height = 5.5, dpi = 150)
+ggsave("../output/figures/10_state_sample_without_us.png", width = 14, height = 5.5, dpi = 150)
 
 df_state_quality <- df_clean_quality
 df_state_bad     <- df_clean_bad
@@ -409,74 +493,23 @@ ggplot(state_sample_split, aes(x = reorder(state, -samplesize), y = samplesize, 
     panel.grid.minor = element_blank(),
     axis.text.x      = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7)
   )
-ggsave("../output/figures/15_proportion_quality_by_state.png", width = 14, height = 5.5, dpi = 150)
+ggsave("../output/figures/11_proportion_quality_by_state.png", width = 14, height = 5.5, dpi = 150)
 
-# ── 9. Which State Voted for Who ──────────────────────────────────────────────
-state_margins <- df_clean %>%
-  group_by(state) %>%
-  summarise(margin = weighted.mean(margin, weight, na.rm = TRUE)) %>%
-  filter(state != "U.S.") %>%
-  mutate(state = tolower(state))
-
-# Get US map data
-us_map <- map_data("state")
-
-# Join
-map_data_merged <- us_map %>%
-  left_join(state_margins, by = c("region" = "state"))
-
-ggplot(map_data_merged, aes(x = long, y = lat, group = group, fill = margin)) +
-  geom_polygon(color = "white", linewidth = 0.3) +
-  scale_fill_gradient2(
-    low      = "#D85A30",
-    mid      = "white", 
-    high     = "#185FA5",
-    midpoint = 0,
-    name     = "Clinton − Trump\nmargin"
-  ) +
-  coord_fixed(1.3) +
+ggplot(state_battlegrounds,
+       aes(x = weight_shift, y = reorder(state, weight_shift))) +
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.6) +
+  geom_col(fill = "#B5D4F4", color = "#185FA5", linewidth = 0.3, alpha = 0.85) +
   labs(
-    title    = "Weighted poll margin by state — 2016 US Presidential Election",
-    subtitle = "Blue = Clinton leading. Orange = Trump leading.",
-    x        = NULL,
-    y        = NULL
+    title = "How pollster-cap weighting changed battleground margins",
+    subtitle = "Positive values mean the weighting moved the state toward Clinton; negative values moved it toward Trump.",
+    x = "Weighted margin − unweighted margin",
+    y = "State"
   ) +
-  theme_void(base_size = 13) +
+  theme_minimal(base_size = 13) +
   theme(
-    plot.title    = element_text(face = "bold"),
-    plot.background  = element_rect(fill = "white", color = NA),
-    legend.position = "right"
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    plot.background = element_rect(fill = "white", color = NA)
   )
-ggsave("../output/figures/16_state_heatmap.png", width = 14, height = 5.5, dpi = 150)
 
-# # Unweighted
-# state_margins_unweighted <- df_clean %>%
-#   group_by(state) %>%
-#   summarise(margin = mean(margin, na.rm = TRUE)) %>%
-#   filter(state != "U.S.") %>%
-#   mutate(state = tolower(state))
-# 
-# map_data_unweighted <- us_map %>%
-#   left_join(state_margins_unweighted, by = c("region" = "state"))
-# 
-# ggplot(map_data_unweighted, aes(x = long, y = lat, group = group, fill = margin)) +
-#   geom_polygon(color = "white", linewidth = 0.3) +
-#   scale_fill_gradient2(
-#     low      = "#D85A30",
-#     mid      = "white",
-#     high     = "#185FA5",
-#     midpoint = 0,
-#     name     = "Clinton − Trump\nmargin"
-#   ) +
-#   coord_fixed(1.3) +
-#   labs(
-#     title    = "Unweighted poll margin by state — 2016 US Presidential Election",
-#     subtitle = "Blue = Clinton leading. Orange = Trump leading.",
-#     x        = NULL,
-#     y        = NULL
-#   ) +
-#   theme_void(base_size = 13) +
-#   theme(
-#     plot.title      = element_text(face = "bold"),
-#     legend.position = "right"
-#   )
+ggsave("../output/figures/15_battleground_weight_shift.png", width = 9, height = 5.5, dpi = 150)

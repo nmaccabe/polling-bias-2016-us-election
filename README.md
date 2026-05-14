@@ -1,151 +1,234 @@
-# 2016 U.S. Presidential Election Polling Bias — Findings
+# 2016 U.S. Presidential Election Polling Weights
 
-**Data:** Presidential General Election Polls  
-**Access:** `dslabs::polls_us_election_2016`  
+This project explores how different weighting choices change the interpretation of 2016 U.S. presidential election polls. The goal is not to build a full election forecast. Instead, the project asks a narrower methodological question:
+
+> If pollsters are weighted by historical predictive quality and sample size, does the 2016 polling picture move closer to Trump, or further toward Clinton?
+
+The answer from this experiment is surprising: the pollster-cap weighting scheme gives sensible-looking influence to high-quality pollsters, but it pushes the pooled polling average further toward Clinton and often shifts battleground states further toward Clinton as well.
 
 ---
-```
-polling-bias-2016-us-election/
-├── src/
-│   └── analysis.R
-├── output/
-│   └── figures/
-│       ├── 01_tplot_full.png
-│       ├── 02_tplot_quality.png
-│       ├── 03_tplot_bad.png
-│       ├── 04_boxplot_population_full.png
-│       ├── 05_boxplot_population_quality.png
-│       ├── 06_boxplot_population_bad.png
-│       ├── 07_timeseries_full.png
-│       ├── 08_timeseries_quality.png
-│       ├── 09_timeseries_bad.png
-│       ├── 10_weighted_dist_full.png
-│       ├── 11_weighted_dist_quality.png
-│       ├── 12_weighted_dist_bad.png
-│       ├── 13_state_sample_with_us.png
-│       ├── 14_state_sample_without_us.png
-│       ├── 15_state_sample_without_us.png
-│       └── 16_state_heatmap.png
-├── .gitignore
-└── README.md
+
+## Data
+
+The polling dataset comes from `dslabs::polls_us_election_2016`.
+
+The pollster-quality data comes from FiveThirtyEight's pollster ratings file, specifically the `Predictive.Plus.Minus` variable.
+
+All margins are measured as:
+
+```text
+Clinton margin = rawpoll_clinton - rawpoll_trump
 ```
 
-## 1. Margin Definition
-
-All analysis uses the raw Clinton − Trump margin (percentage points).  
-- Positive values → Clinton leading  
-- Negative values → Trump leading  
-- Zero is the electoral threshold that matters
+Positive values indicate a Clinton lead. Negative values indicate a Trump lead.
 
 ---
 
-## 2. Unweighted Means (Raw Poll Averages)
+## What is Predictive Plus-Minus?
 
-| Subset | Mean Margin |
-|--------|------------|
-| All polls | +2.16 |
-| Quality pollsters (B+ and above) | +3.10 |
-| Low quality pollsters (below B+) | +1.62 |
+FiveThirtyEight's pollster ratings are based on **Predictive Plus-Minus**, a pollster-quality metric designed to measure how much better or worse a pollster is expected to perform relative to an average pollster.
 
-At face value, every subset pointed to a Clinton lead. Quality pollsters actually showed a *larger* Clinton advantage than low quality pollsters unweighted, which runs counter to the narrative that better polls were more accurate.
+FiveThirtyEight describes Predictive Plus-Minus as depending on several components:
 
----
+- simple polling error,
+- how well other pollsters performed in the same races,
+- methodological quality,
+- and evidence of herding.
 
-## 3. Weighted Means (Grade × Sample Size Weighting)
-
-Each poll is weighted by:  
-`weight = grade_weight / samplesize`  
-Normalized so all weights sum to 1.
-
-Grade weights: A+ = 1.0, A = 0.75, A− = 0.5, B+ = 0.25, B = 0.125, B− = 0.1, C+ = 0.075, C = 0.05, C− = 0.025, D = 0.0125
-
-| Subset | Weighted Mean Margin |
-|--------|---------------------|
-| All polls | +0.47 |
-| Quality pollsters (B+ and above) | **−0.16 (Trump)** |
-| Low quality pollsters (below B+) | +2.15 |
-
-**Key finding:** Once pollster quality and sample size are accounted for, the quality-weighted mean flips negative — pointing to a near toss-up or slight Trump edge. This is consistent with the actual election outcome. The unweighted quality mean of +3.10 was being inflated by small, high-grade polls showing large Clinton leads. When downweighted by sample size, the signal reverses.
-
-Low quality polls barely moved when weighted (+1.62 → +2.15), suggesting their large sample sizes were artificially inflating Clinton's lead in the raw aggregate.
+Lower values are better. Negative values indicate pollsters that are expected to perform better than average. Positive values indicate pollsters expected to perform worse than average.
 
 ---
 
-## 4. Sample Size Distribution
+## Weight Specification
+
+The project uses a **pollster-cap weighting scheme**. The idea is to prevent high-frequency pollsters from dominating the dataset simply because they released many polls.
+
+Each pollster first receives a total influence cap:
+
+```text
+pollster_cap_p = exp(-PredictivePlusMinus_p) * sqrt(mean_sample_size_p)
+```
+
+Then that pollster's cap is distributed across its own polls according to individual sample size:
+
+```text
+within_pollster_weight_i = sqrt(sample_size_i) / sum(sqrt(sample_size_j)) for polls j from the same pollster
+```
+
+The final raw poll weight is:
+
+```text
+raw_weight_i = pollster_cap_p * within_pollster_weight_i
+```
+
+Finally, all weights are normalized to sum to 1.
+
+This specification does three things:
+
+1. rewards historically stronger pollsters using FiveThirtyEight's Predictive Plus-Minus,
+2. rewards larger samples with diminishing returns,
+3. prevents high-volume pollsters from dominating the aggregate.
+
+---
+
+## Raw Polling Averages
+
+| Subset | Unweighted Mean Margin |
+|---|---:|
+| All polls | Clinton +2.16 |
+| Quality pollsters, B+ and above | Clinton +3.10 |
+| Low-quality pollsters, below B+ | Clinton +1.62 |
+
+All three unweighted averages point to Clinton. The higher-rated pollster subset actually shows the largest Clinton lead.
+
+---
+
+## Pollster-Cap Weighted Averages
+
+| Subset | Pollster-Cap Weighted Mean Margin |
+|---|---:|
+| All polls | Clinton +4.80 |
+| Quality pollsters, B+ and above | Clinton +6.41 |
+| Low-quality pollsters, below B+ | Clinton +2.25 |
+
+This is the central result of the weighting experiment. The new weighting scheme does **not** correct the 2016 polling miss toward Trump. Instead, it pushes the aggregate further toward Clinton.
+
+This does not mean the formula is mechanically broken. The top-weighted pollsters are generally high-quality pollsters. The issue is that high-quality pollsters in this dataset often had more Clinton-favourable margins, especially in national polls and strongly Democratic states.
+
+---
+
+## Sample Size Patterns
 
 | Subset | Mean Sample Size | Median Sample Size |
-|--------|-----------------|-------------------|
+|---|---:|---:|
 | All polls | 1,148 | 772 |
 | Quality pollsters | 795 | 698 |
-| Low quality pollsters | 1,350 | 800 |
+| Low-quality pollsters | 1,350 | 800 |
 
-Low quality pollsters ran systematically larger samples than quality pollsters. This is the core mechanism behind the weighting story: in a naive (unweighted) average, large low-quality polls dominate the signal. Dividing by sample size corrects for this.
-
----
-
-## 5. Voter Population Type (lv / rv / v / a)
-
-The boxplot analysis (Figures 04–06) shows a clear spectrum from most to least screened:
-
-- **a (adults):** Median clearly below zero — Trump favored. Broadest, least screened sample.
-- **lv (likely voters):** Median just above zero, straddles the threshold. Largest variance and extreme outliers.
-- **rv (registered voters):** Median above zero, Clinton more clearly favored.
-- **v (voters):** Near toss-up.
-
-Among quality pollsters specifically, the adult polls showed a Clinton margin around −15 points — a stark signal that unscreened samples were unfavorable to Clinton. The likely voter spread was enormous, consistent with pollsters using very different likely voter screens.
+Low-quality pollsters tended to have larger samples in this dataset. That matters because simple sample-size weighting alone can give a lot of influence to lower-rated, high-volume pollsters.
 
 ---
 
-## 6. Poll Margin Over Time (LOESS)
+## Pollster Influence
 
-**All pollsters (Figure 07):** Clinton maintained a narrow positive margin throughout the campaign, converging toward zero by Election Day. The LOESS smoother barely crossed above zero and finished essentially at the threshold.
+The project compares two different notions of influence:
 
-**Quality pollsters (Figure 08):** A clearer arc — Clinton peaked around April–May 2016 at roughly +8 points, then declined steadily through the summer and fall, crossing below zero in the final weeks. This is the most honest picture of the race.
+1. **sample share**, or which pollsters interviewed the most total respondents;
+2. **pollster-cap weight share**, or which pollsters receive the most influence after applying the weighting formula.
 
-**Low quality pollsters (Figure 09):** A nearly flat, near-zero line throughout — these polls showed almost no momentum signal and essentially no lead for either candidate at any point. This suggests low quality pollsters were contributing noise rather than signal to the aggregate.
+The largest sample-share pollsters are high-volume firms such as SurveyMonkey, Ipsos, Google Consumer Surveys, YouGov, CVOTER, and Gravis.
 
----
+The largest pollster-cap weights instead go to stronger-rated pollsters such as Field Poll, Selzer, ABC News/Washington Post, Marist, Monmouth, PPIC, National Journal, SurveyUSA, Pew, and Siena.
 
-## 7. State-Level Sample Distribution (Figures 13–15)
-
-**Total sample size (Figure 13 with U.S., Figure 14 without):**  
-U.S. national polls dominated by volume. Among states, Florida, Pennsylvania, North Carolina, and Ohio led — the classic 2016 battleground map. Non-competitive states had minimal polling coverage.
-
-**Proportion of quality vs low quality polling by state (Figure 15):**  
-Across virtually every state, 65–95% of total respondents came from low quality pollsters. Florida and Pennsylvania had the highest quality proportions (~30–45%), reflecting their status as top-tier battlegrounds attracting premium pollsters. Many states had essentially zero quality polling — Wyoming, North Dakota, and Nebraska congressional districts were near 100% low quality.
-
-This chart is the visual justification for the weighting scheme. A naive unweighted aggregate is functionally a low-quality-pollster average, with a small quality signal buried inside it.
+This means the weight formula is doing what it was designed to do: it reduces the dominance of high-volume pollsters and shifts influence toward historically stronger pollsters.
 
 ---
 
-## 8. Summary Interpretation
+## State-Level Interpretation
 
-The 2016 polling miss was not random noise. A systematic pattern emerges:
+The pooled weighted average is not a national forecast because the dataset mixes:
 
-1. Low quality pollsters ran large samples that skewed Clinton
-2. High quality pollsters with large samples pointed to a near-toss-up
-3. The volume of low-quality polling swamped the signal from quality polls in unweighted aggregates
-4. Standard poll averages reported a Clinton lead of ~2–3 points; a properly weighted quality-only average pointed to essentially 0
+- national polls,
+- state polls,
+- safe-state polls,
+- battleground polls,
+- and polls taken at different points in the campaign.
 
-The weighted quality mean of −0.16 is not a confident Trump prediction, but it correctly identifies the race as too close to call — which the unweighted average of +3.10 did not.
+For that reason, the more meaningful comparison is state-level. The script computes both unweighted and pollster-cap weighted margins within each state.
+
+---
+
+## Battleground Result
+
+The battleground chart shows how much the pollster-cap weighting changed each battleground state's margin:
+
+```text
+weight_shift = weighted_margin - unweighted_margin
+```
+
+Positive values mean the weighting moved the state toward Clinton. Negative values mean the weighting moved the state toward Trump.
+
+In the battleground set, the weighting moved most states toward Clinton:
+
+| State | Direction of Shift |
+|---|---|
+| Georgia | Toward Clinton |
+| Arizona | Toward Clinton |
+| Michigan | Toward Clinton |
+| Pennsylvania | Toward Clinton |
+| Wisconsin | Toward Clinton |
+| Colorado | Toward Clinton |
+| Nevada | Toward Clinton |
+| Ohio | Toward Clinton |
+| North Carolina | Toward Clinton |
+| Florida | Toward Clinton |
+| Iowa | Toward Trump |
+| New Hampshire | Toward Trump |
+
+The key visualization is therefore not a prediction map. It is a methodological result: weighting by pollster quality did not automatically solve the 2016 polling error.
+
+---
+
+## Main Finding
+
+The pollster-cap weighting scheme works as a weighting exercise, but it does not produce the correction I originally expected.
+
+The initial intuition was that rewarding better pollsters and capping high-frequency pollsters might reduce Clinton's apparent lead. Instead, the weighted averages generally increase Clinton's lead. This suggests that the 2016 polling miss was not simply caused by low-quality pollsters receiving too much influence. In this dataset, many of the highly rated pollsters were also Clinton-favourable.
+
+The strongest interpretation is:
+
+> Pollster-quality weighting changes which pollsters dominate the aggregate, but it does not necessarily remove systematic polling error. In 2016, weighting by historical pollster quality often moved estimates further toward Clinton rather than toward Trump.
 
 ---
 
 ## Key Figures
 
-**Quality pollster margin distribution (unweighted)**  
-![Quality pollster margin distribution — unweighted](output/figures/02_tplot_quality.png)
+### Poll margin distribution, all polls
 
-**Quality pollster margin distribution (weighted by grade and sample size)**  
-![Quality pollster margin distribution — weighted](output/figures/11_weighted_dist_quality.png)
+![Poll margin distribution — all states](output/figures/01_tplot_full.png)
 
-**Proportion of quality vs low quality polling by state**  
-![Proportion of sample size by pollster quality per state](output/figures/15_proportion_quality_by_state.png)
+### Poll margin distribution, quality pollsters
 
-**State Heatmap (Weighted)**
-![Weighted poll margin per state](output/figures/16_state_heatmap.png)
+![Poll margin distribution — quality pollsters](output/figures/02_tplot_quality.png)
+
+### Total sample size by state
+
+![Total sample size by state](output/figures/10_state_sample_without_us.png)
+
+### Top 20 pollsters by total sample share
+
+![Top pollsters by sample share](output/figures/13_biggest_pollers.png)
+
+### Top 20 pollsters by pollster-cap weight share
+
+![Top pollsters by total weight share](output/figures/14_pollers_total_weight.png)
+
+### Battleground weight shift
+
+![Battleground weight shift](output/figures/15_battleground_weight_shift.png)
+
+---
+
+## Limitations
+
+This is not a full election model. It does not adjust for:
+
+- actual 2016 state election results,
+- Electoral College weighting,
+- education weighting,
+- likely voter screen quality,
+- undecided voter allocation,
+- late campaign movement,
+- house effects,
+- poll recency,
+- or correlated polling error across states.
+
+The project is best understood as a data visualization and weighting experiment, not as a forecast.
+
 ---
 
 ## References
 
-- Irizarry, R.A. and Gill, A. (2021). *dslabs: Data Science Labs*. R package version 0.7.4. https://CRAN.R-project.org/package=dslabs  
+- FiveThirtyEight. "How Our Pollster Ratings Work." https://fivethirtyeight.com/methodology/how-our-pollster-ratings-work/
+- FiveThirtyEight. "How FiveThirtyEight Calculates Pollster Ratings." https://fivethirtyeight.com/features/how-fivethirtyeight-calculates-pollster-ratings/
+- Irizarry, R.A. and Gill, A. (2021). `dslabs: Data Science Labs`. R package version 0.7.4. https://CRAN.R-project.org/package=dslabs
